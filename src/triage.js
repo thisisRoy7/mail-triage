@@ -15,7 +15,7 @@ export async function syncAndTriage() {
       category: analysis.category,
       urgency: analysis.urgency,
       tldr: analysis.tldr,
-      suggested_reply: analysis.suggested_reply
+      suggested_reply: null
     };
 
     emailDb.insert(fullRecord);

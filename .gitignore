@@ -30,3 +30,7 @@ Thumbs.db
 *.log
 *.tmp
 *.swp
+
+# Code bundling utility and output
+bundle.js
+bundled_codebase.txt

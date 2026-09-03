@@ -22,6 +22,7 @@ db.exec(`
 
 export const emailDb = {
   exists: (id) => !!db.prepare('SELECT 1 FROM emails WHERE id = ?').get(id),
+  getById: (id) => db.prepare('SELECT * FROM emails WHERE id = ?').get(id),
   insert: (email) => {
     const stmt = db.prepare(`
       INSERT INTO emails (id, sender, subject, date, body, category, urgency, tldr, suggested_reply)
@@ -29,5 +30,9 @@ export const emailDb = {
     `);
     return stmt.run(email);
   },
-  getAll: () => db.prepare('SELECT * FROM emails ORDER BY created_at DESC').all()
+  updateReply: (id, reply) => {
+    return db.prepare('UPDATE emails SET suggested_reply = ? WHERE id = ?').run(reply, id);
+  },
+  getAll: () => db.prepare('SELECT * FROM emails ORDER BY created_at DESC').all(),
+  clearAll: () => db.prepare('DELETE FROM emails').run()
 };

@@ -13,9 +13,14 @@
       <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
       <h1 class="text-sm font-semibold tracking-wide uppercase text-zinc-400">Local Triage</h1>
     </div>
-    <button onclick="sync()" id="syncBtn" class="bg-zinc-100 hover:bg-white text-zinc-900 px-3.5 py-1.5 rounded-lg text-xs font-medium transition shadow-sm">
-      Sync & Triage
-    </button>
+    <div class="flex items-center gap-3">
+      <button onclick="resetData()" id="resetBtn" class="bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800 px-3 py-1.5 rounded-lg text-xs font-medium transition">
+        Reset Database
+      </button>
+      <button onclick="sync()" id="syncBtn" class="bg-zinc-100 hover:bg-white text-zinc-900 px-3.5 py-1.5 rounded-lg text-xs font-medium transition shadow-sm">
+        Sync & Triage
+      </button>
+    </div>
   </header>
 
   <!-- Content Workspace -->
@@ -40,7 +45,15 @@
         const res = await fetch('/api/emails');
         emails = await res.json();
         renderList();
-        if (emails.length && !activeId) select(emails[0].id);
+        if (emails.length) {
+          if (!activeId || !emails.find(e => e.id === activeId)) {
+            select(emails[0].id);
+          } else {
+            select(activeId);
+          }
+        } else {
+          document.getElementById('detailPane').innerHTML = '<div class="h-full flex items-center justify-center text-zinc-600 text-sm">Select an email to view triage analysis</div>';
+        }
       } catch (err) {
         console.error('Failed to load emails:', err);
       }
@@ -64,10 +77,30 @@
       }
     }
 
+    async function resetData() {
+      if (!confirm('This will wipe all locally stored triaged emails so you can sync freshly. Proceed?')) return;
+      const btn = document.getElementById('resetBtn');
+      btn.innerText = 'Resetting...';
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/reset', { method: 'POST' });
+        if (!res.ok) throw new Error('Failed to reset');
+        emails = [];
+        activeId = null;
+        renderList();
+        document.getElementById('detailPane').innerHTML = '<div class="h-full flex items-center justify-center text-zinc-600 text-sm">Select an email to view triage analysis</div>';
+      } catch (err) {
+        alert('Reset failed: ' + err.message);
+      } finally {
+        btn.innerText = 'Reset Database';
+        btn.disabled = false;
+      }
+    }
+
     function renderList() {
       const pane = document.getElementById('listPane');
       if (!emails.length) {
-        pane.innerHTML = '<div class="p-6 text-zinc-600 text-xs text-center">No emails found. Ensure you have unread messages in Gmail.</div>';
+        pane.innerHTML = '<div class="p-6 text-zinc-600 text-xs text-center">No emails found. Click "Sync & Triage" to load unread messages.</div>';
         return;
       }
       pane.innerHTML = emails.map(e => `
@@ -86,7 +119,11 @@
       activeId = id;
       renderList();
       const mail = emails.find(e => e.id === id);
+      if (!mail) return;
       const detail = document.getElementById('detailPane');
+
+      const hasReply = mail.suggested_reply && mail.suggested_reply.trim().length > 0;
+
       detail.innerHTML = `
         <div class="max-w-2xl space-y-6">
           <div class="p-4 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-3">
@@ -97,12 +134,30 @@
             <p class="text-sm text-zinc-300">${mail.tldr}</p>
           </div>
 
-          <div class="space-y-2">
+          <!-- On-Demand Draft Section -->
+          <div class="space-y-3">
             <div class="flex justify-between items-center">
               <label class="font-mono text-xs text-zinc-400">DRAFT REPLY</label>
-              <button onclick="copyDraft()" id="copyBtn" class="text-xs text-zinc-400 hover:text-zinc-200 transition">Copy</button>
+              ${hasReply ? `
+                <div class="flex items-center gap-2">
+                  <button onclick="requestDraft('${mail.id}')" id="generateDraftBtn" class="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-2.5 py-1 rounded text-zinc-200 transition">
+                    Regenerate
+                  </button>
+                  <button onclick="copyDraft()" id="copyBtn" class="text-xs text-zinc-400 hover:text-zinc-200 transition">Copy</button>
+                </div>
+              ` : ''}
             </div>
-            <textarea id="draftArea" class="w-full h-32 p-3 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-300 focus:outline-none focus:border-zinc-700 leading-relaxed resize-none">${mail.suggested_reply}</textarea>
+
+            ${hasReply ? `
+              <textarea id="draftArea" class="w-full h-36 p-3 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-300 focus:outline-none focus:border-zinc-700 leading-relaxed resize-none">${mail.suggested_reply}</textarea>
+            ` : `
+              <div class="p-4 border border-dashed border-zinc-800 rounded-lg flex flex-col items-center justify-center gap-2 text-center bg-zinc-950/40">
+                <span class="text-xs text-zinc-500">No draft generated for this email.</span>
+                <button onclick="requestDraft('${mail.id}')" id="generateDraftBtn" class="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-3 py-1.5 rounded-md text-zinc-200 font-medium transition">
+                  Generate Draft with Ollama
+                </button>
+              </div>
+            `}
           </div>
 
           <div class="pt-4 border-t border-zinc-800/80 space-y-2">
@@ -114,12 +169,39 @@
       `;
     }
 
+    async function requestDraft(id) {
+      const btn = document.getElementById('generateDraftBtn');
+      if (btn) {
+        btn.innerText = 'Drafting...';
+        btn.disabled = true;
+      }
+
+      try {
+        const res = await fetch(`/api/emails/${id}/draft`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to generate draft');
+
+        const target = emails.find(e => e.id === id);
+        if (target) target.suggested_reply = data.suggested_reply;
+
+        if (activeId === id) select(id);
+      } catch (err) {
+        alert('Draft failed: ' + err.message);
+        if (btn) {
+          btn.innerText = 'Generate Draft with Ollama';
+          btn.disabled = false;
+        }
+      }
+    }
+
     function copyDraft() {
       const copyText = document.getElementById('draftArea').value;
       navigator.clipboard.writeText(copyText);
       const btn = document.getElementById('copyBtn');
-      btn.innerText = 'Copied!';
-      setTimeout(() => btn.innerText = 'Copy', 1500);
+      if (btn) {
+        btn.innerText = 'Copied!';
+        setTimeout(() => btn.innerText = 'Copy', 1500);
+      }
     }
 
     function badgeStyle(urgency) {
