@@ -2,20 +2,24 @@ import imaps from 'imap-simple';
 import { simpleParser } from 'mailparser';
 import { config } from './config.js';
 
-export async function fetchUnreadEmails(limit = 10) {
+export async function fetchEmails({ limit = null } = {}) {
   const connection = await imaps.connect({ imap: config.gmail });
   await connection.openBox('INBOX');
 
-  // Search unread messages
-  const searchCriteria = ['UNSEEN'];
+  // Fetch all messages (read and unread)
+  const searchCriteria = ['ALL'];
   const fetchOptions = { bodies: ['HEADER', ''], markSeen: false };
-  const messages = await connection.search(searchCriteria, fetchOptions);
+  const rawResults = await connection.search(searchCriteria, fetchOptions);
 
+  // Take latest 'limit' if specified, or all
+  const targetMessages = limit ? rawResults.slice(-limit) : rawResults;
   const parsed = [];
-  for (const item of messages.slice(-limit)) {
-    const rawPart = item.parts.find((p) => p.which === '');
-    const mail = await simpleParser(rawPart.body);
 
+  for (const item of targetMessages) {
+    const rawPart = item.parts.find((p) => p.which === '');
+    if (!rawPart) continue;
+
+    const mail = await simpleParser(rawPart.body);
     parsed.push({
       id: item.attributes.uid.toString(),
       sender: mail.from?.text || 'Unknown',

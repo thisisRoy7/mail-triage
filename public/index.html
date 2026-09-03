@@ -7,31 +7,71 @@
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-zinc-950 text-zinc-200 h-screen flex flex-col overflow-hidden font-sans antialiased">
+  
   <!-- Top Bar -->
-  <header class="h-14 border-b border-zinc-800/80 px-6 flex items-center justify-between bg-zinc-900/40 shrink-0">
-    <div class="flex items-center gap-2">
-      <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-      <h1 class="text-sm font-semibold tracking-wide uppercase text-zinc-400">Local Triage</h1>
-    </div>
+  <header class="h-14 border-b border-zinc-800 px-6 flex items-center justify-between bg-zinc-900/60 shrink-0">
     <div class="flex items-center gap-3">
-      <button onclick="resetData()" id="resetBtn" class="bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800 px-3 py-1.5 rounded-lg text-xs font-medium transition">
-        Reset Database
+      <span id="workerHeartbeat" class="w-2.5 h-2.5 rounded-full bg-zinc-600 transition-colors"></span>
+      <h1 class="text-xs font-semibold tracking-wider uppercase text-zinc-400">Local Triage Studio</h1>
+      <span id="workerStatusBadge" class="font-mono text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">Idle</span>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <button onclick="triggerReset('soft')" class="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 px-3 py-1.5 rounded-lg text-xs font-medium transition">
+        Soft Reset (100)
       </button>
-      <button onclick="sync()" id="syncBtn" class="bg-zinc-100 hover:bg-white text-zinc-900 px-3.5 py-1.5 rounded-lg text-xs font-medium transition shadow-sm">
-        Sync & Triage
+      <button onclick="triggerReset('full')" class="bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-900/60 px-3 py-1.5 rounded-lg text-xs font-medium transition">
+        Full Reset (All)
+      </button>
+      <button onclick="triggerSync()" id="syncBtn" class="bg-zinc-100 hover:bg-white text-zinc-950 font-medium px-3.5 py-1.5 rounded-lg text-xs transition shadow-sm">
+        Sync New
       </button>
     </div>
   </header>
 
+  <!-- Real-Time Progress / Monitor Bar -->
+  <div class="border-b border-zinc-800 bg-zinc-900/30 px-6 py-2.5 shrink-0 flex flex-col gap-1.5">
+    <div class="flex justify-between items-center text-xs">
+      <div class="flex items-center gap-2 truncate max-w-[65%]">
+        <span class="text-zinc-500 font-mono">TASK:</span>
+        <span id="activeEmailName" class="text-zinc-300 truncate font-mono text-[11px]">No active background tasks</span>
+      </div>
+      <div class="font-mono text-[11px] text-zinc-400 flex items-center gap-2">
+        <span id="statsLabel">0/0 Triaged</span>
+        <span id="pctLabel" class="text-emerald-400 font-semibold">0%</span>
+      </div>
+    </div>
+    <div class="w-full bg-zinc-800/60 h-1.5 rounded-full overflow-hidden">
+      <div id="progressBar" class="bg-emerald-500 h-full w-0 transition-all duration-300"></div>
+    </div>
+  </div>
+
   <!-- Content Workspace -->
   <main class="flex-1 flex overflow-hidden">
-    <!-- Left Drawer (List) -->
-    <section class="w-2/5 border-r border-zinc-800/80 overflow-y-auto" id="listPane">
-      <div class="p-6 text-zinc-600 text-xs text-center">Click "Sync & Triage" to load unread mail</div>
+    <!-- Left Drawer (Filter Toolbar + Scrollable List) -->
+    <section class="w-5/12 border-r border-zinc-800 flex flex-col h-full overflow-hidden">
+      
+      <!-- List Controls Toolbar -->
+      <div class="p-3 border-b border-zinc-800/80 bg-zinc-900/20 flex items-center justify-between gap-2 shrink-0">
+        <div class="flex items-center gap-1">
+          <button onclick="setFilter('ALL')" id="filter-ALL" class="urgency-tab px-2.5 py-1 rounded text-xs font-mono bg-zinc-800 text-zinc-100">ALL</button>
+          <button onclick="setFilter('HIGH')" id="filter-HIGH" class="urgency-tab px-2.5 py-1 rounded text-xs font-mono text-zinc-400 hover:text-zinc-200">HIGH</button>
+          <button onclick="setFilter('MEDIUM')" id="filter-MEDIUM" class="urgency-tab px-2.5 py-1 rounded text-xs font-mono text-zinc-400 hover:text-zinc-200">MED</button>
+          <button onclick="setFilter('LOW')" id="filter-LOW" class="urgency-tab px-2.5 py-1 rounded text-xs font-mono text-zinc-400 hover:text-zinc-200">LOW</button>
+        </div>
+        <button onclick="loadEmails()" title="Refresh List" class="text-zinc-400 hover:text-zinc-200 p-1 rounded hover:bg-zinc-800 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        </button>
+      </div>
+
+      <!-- Virtualized Scroll List -->
+      <div class="flex-1 overflow-y-auto divide-y divide-zinc-800/50" id="listPane">
+        <div class="p-6 text-zinc-600 text-xs text-center">Loading mail...</div>
+      </div>
     </section>
 
-    <!-- Right Drawer (Detail) -->
-    <section class="w-3/5 p-6 overflow-y-auto bg-zinc-900/20" id="detailPane">
+    <!-- Right Drawer (Detail & Draft) -->
+    <section class="w-7/12 p-6 overflow-y-auto bg-zinc-900/10" id="detailPane">
       <div class="h-full flex items-center justify-center text-zinc-600 text-sm">Select an email to view triage analysis</div>
     </section>
   </main>
@@ -39,80 +79,138 @@
   <script>
     let emails = [];
     let activeId = null;
+    let currentFilter = 'ALL';
+    let isWorkerRunning = false;
 
-    async function load() {
+    // Connect Server-Sent Events (SSE) for progress and health monitoring
+    function initProgressStream() {
+      const evtSource = new EventSource('/api/progress/stream');
+
+      evtSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        const { isRunning, isStalled, currentEmail, stats, progressPct } = data;
+        
+        // Update Heartbeat & Status
+        const heartbeat = document.getElementById('workerHeartbeat');
+        const badge = document.getElementById('workerStatusBadge');
+
+        if (isStalled) {
+          heartbeat.className = 'w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping';
+          badge.innerText = 'Stalled';
+          badge.className = 'font-mono text-[10px] px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800';
+        } else if (isRunning) {
+          heartbeat.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse';
+          badge.innerText = 'Processing';
+          badge.className = 'font-mono text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800';
+        } else {
+          heartbeat.className = 'w-2.5 h-2.5 rounded-full bg-zinc-600';
+          badge.innerText = 'Idle';
+          badge.className = 'font-mono text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400';
+        }
+
+        // Update Progress Bar
+        document.getElementById('progressBar').style.width = `${progressPct}%`;
+        document.getElementById('pctLabel').innerText = `${progressPct}%`;
+        document.getElementById('statsLabel').innerText = `${stats.completed + stats.failed}/${stats.total} Triaged`;
+
+        // Update Active Label
+        document.getElementById('activeEmailName').innerText = currentEmail 
+          ? `[${currentEmail.sender}] ${currentEmail.subject}` 
+          : (isRunning ? 'Scanning queue...' : 'No active background tasks');
+
+        // Refresh list automatically when processing transitions
+        if (isWorkerRunning !== isRunning) {
+          isWorkerRunning = isRunning;
+          loadEmails();
+        }
+      };
+
+      evtSource.onerror = () => {
+        document.getElementById('workerStatusBadge').innerText = 'Reconnecting...';
+      };
+    }
+
+    async function loadEmails() {
       try {
-        const res = await fetch('/api/emails');
+        const query = currentFilter !== 'ALL' ? `?urgency=${currentFilter}` : '';
+        const res = await fetch(`/api/emails${query}`);
         emails = await res.json();
         renderList();
-        if (emails.length) {
+
+        if (emails.length > 0) {
           if (!activeId || !emails.find(e => e.id === activeId)) {
             select(emails[0].id);
           } else {
             select(activeId);
           }
         } else {
-          document.getElementById('detailPane').innerHTML = '<div class="h-full flex items-center justify-center text-zinc-600 text-sm">Select an email to view triage analysis</div>';
+          document.getElementById('detailPane').innerHTML = 
+            '<div class="h-full flex items-center justify-center text-zinc-600 text-sm">No emails match the filter</div>';
         }
       } catch (err) {
         console.error('Failed to load emails:', err);
       }
     }
 
-    async function sync() {
+    function setFilter(urgency) {
+      currentFilter = urgency;
+      document.querySelectorAll('.urgency-tab').forEach(btn => {
+        btn.className = 'urgency-tab px-2.5 py-1 rounded text-xs font-mono text-zinc-400 hover:text-zinc-200';
+      });
+      document.getElementById(`filter-${urgency}`).className = 'urgency-tab px-2.5 py-1 rounded text-xs font-mono bg-zinc-800 text-zinc-100 font-semibold';
+      loadEmails();
+    }
+
+    async function triggerSync() {
       const btn = document.getElementById('syncBtn');
-      btn.innerText = 'Analyzing with Ollama...';
       btn.disabled = true;
       try {
-        const res = await fetch('/api/sync', { method: 'POST' });
-        const result = await res.json();
-        if (!res.ok) throw new Error(result.error || 'Sync failed');
-        await load();
+        await fetch('/api/sync', { method: 'POST' });
+        await loadEmails();
       } catch (err) {
-        alert('Sync failed: ' + err.message);
-        console.error(err);
+        alert('Sync error: ' + err.message);
       } finally {
-        btn.innerText = 'Sync & Triage';
         btn.disabled = false;
       }
     }
 
-    async function resetData() {
-      if (!confirm('This will wipe all locally stored triaged emails so you can sync freshly. Proceed?')) return;
-      const btn = document.getElementById('resetBtn');
-      btn.innerText = 'Resetting...';
-      btn.disabled = true;
+    async function triggerReset(type) {
+      const msg = type === 'soft' 
+        ? 'Soft Reset will fetch the latest 100 emails and re-triage them. Proceed?' 
+        : 'Full Reset will ingest all emails from your inbox and re-triage every message from scratch. Proceed?';
+      if (!confirm(msg)) return;
+
       try {
-        const res = await fetch('/api/reset', { method: 'POST' });
-        if (!res.ok) throw new Error('Failed to reset');
-        emails = [];
-        activeId = null;
-        renderList();
-        document.getElementById('detailPane').innerHTML = '<div class="h-full flex items-center justify-center text-zinc-600 text-sm">Select an email to view triage analysis</div>';
+        await fetch(`/api/reset/${type}`, { method: 'POST' });
+        await loadEmails();
       } catch (err) {
-        alert('Reset failed: ' + err.message);
-      } finally {
-        btn.innerText = 'Reset Database';
-        btn.disabled = false;
+        alert(`Reset failed: ${err.message}`);
       }
     }
 
     function renderList() {
       const pane = document.getElementById('listPane');
       if (!emails.length) {
-        pane.innerHTML = '<div class="p-6 text-zinc-600 text-xs text-center">No emails found. Click "Sync & Triage" to load unread messages.</div>';
+        pane.innerHTML = '<div class="p-6 text-zinc-600 text-xs text-center">No emails found.</div>';
         return;
       }
-      pane.innerHTML = emails.map(e => `
-        <div onclick="select('${e.id}')" class="p-4 border-b border-zinc-800/50 cursor-pointer transition ${activeId === e.id ? 'bg-zinc-800/50' : 'hover:bg-zinc-900/40'}">
-          <div class="flex items-center justify-between mb-1.5">
-            <span class="text-xs font-semibold text-zinc-300 truncate max-w-[200px]">${e.sender}</span>
-            <span class="font-mono text-[10px] px-2 py-0.5 rounded border ${badgeStyle(e.urgency)}">${e.urgency}</span>
+
+      pane.innerHTML = emails.map(e => {
+        const isPending = e.status === 'PENDING';
+        return `
+          <div onclick="select('${e.id}')" class="p-4 cursor-pointer transition ${activeId === e.id ? 'bg-zinc-800/60' : 'hover:bg-zinc-900/40'}">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-xs font-semibold text-zinc-300 truncate max-w-[200px]">${escapeHtml(e.sender)}</span>
+              ${isPending 
+                ? '<span class="font-mono text-[9px] px-1.5 py-0.5 rounded border border-zinc-700 bg-zinc-800 text-zinc-400 animate-pulse">QUEUED</span>'
+                : `<span class="font-mono text-[10px] px-2 py-0.5 rounded border ${badgeStyle(e.urgency)}">${e.urgency || 'NONE'}</span>`
+              }
+            </div>
+            <div class="text-sm font-medium text-zinc-200 mb-1 truncate">${escapeHtml(e.subject)}</div>
+            <p class="text-xs text-zinc-500 line-clamp-2">${isPending ? 'Pending analysis...' : escapeHtml(e.tldr || '')}</p>
           </div>
-          <div class="text-sm font-medium text-zinc-200 mb-1 truncate">${e.subject}</div>
-          <p class="text-xs text-zinc-500 line-clamp-2">${e.tldr}</p>
-        </div>
-      `).join('');
+        `;
+      }).join('');
     }
 
     function select(id) {
@@ -120,36 +218,34 @@
       renderList();
       const mail = emails.find(e => e.id === id);
       if (!mail) return;
-      const detail = document.getElementById('detailPane');
 
+      const detail = document.getElementById('detailPane');
       const hasReply = mail.suggested_reply && mail.suggested_reply.trim().length > 0;
+      const isPending = mail.status === 'PENDING';
 
       detail.innerHTML = `
         <div class="max-w-2xl space-y-6">
           <div class="p-4 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-3">
             <div class="flex items-center justify-between">
               <span class="font-mono text-xs text-emerald-400 font-medium tracking-wide">AI TRIAGE SUMMARY</span>
-              <span class="font-mono text-[10px] px-2 py-0.5 rounded border border-zinc-700 bg-zinc-800">${mail.category}</span>
+              <span class="font-mono text-[10px] px-2 py-0.5 rounded border border-zinc-700 bg-zinc-800 text-zinc-300">${mail.category || (isPending ? 'PENDING' : 'UNCATEGORIZED')}</span>
             </div>
-            <p class="text-sm text-zinc-300">${mail.tldr}</p>
+            <p class="text-sm text-zinc-300 leading-relaxed">${isPending ? '<span class="italic text-zinc-500">Currently awaiting LLM analysis in queue...</span>' : escapeHtml(mail.tldr || 'No summary available.')}</p>
           </div>
 
-          <!-- On-Demand Draft Section -->
           <div class="space-y-3">
             <div class="flex justify-between items-center">
               <label class="font-mono text-xs text-zinc-400">DRAFT REPLY</label>
               ${hasReply ? `
                 <div class="flex items-center gap-2">
-                  <button onclick="requestDraft('${mail.id}')" id="generateDraftBtn" class="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-2.5 py-1 rounded text-zinc-200 transition">
-                    Regenerate
-                  </button>
+                  <button onclick="requestDraft('${mail.id}')" id="generateDraftBtn" class="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-2.5 py-1 rounded text-zinc-200 transition">Regenerate</button>
                   <button onclick="copyDraft()" id="copyBtn" class="text-xs text-zinc-400 hover:text-zinc-200 transition">Copy</button>
                 </div>
               ` : ''}
             </div>
 
             ${hasReply ? `
-              <textarea id="draftArea" class="w-full h-36 p-3 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-300 focus:outline-none focus:border-zinc-700 leading-relaxed resize-none">${mail.suggested_reply}</textarea>
+              <textarea id="draftArea" class="w-full h-36 p-3 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-300 focus:outline-none focus:border-zinc-700 leading-relaxed resize-none">${escapeHtml(mail.suggested_reply)}</textarea>
             ` : `
               <div class="p-4 border border-dashed border-zinc-800 rounded-lg flex flex-col items-center justify-center gap-2 text-center bg-zinc-950/40">
                 <span class="text-xs text-zinc-500">No draft generated for this email.</span>
@@ -160,10 +256,10 @@
             `}
           </div>
 
-          <div class="pt-4 border-t border-zinc-800/80 space-y-2">
-            <div class="text-base font-semibold text-zinc-100">${mail.subject}</div>
-            <div class="font-mono text-xs text-zinc-500">From: ${mail.sender}</div>
-            <div class="text-sm text-zinc-400 leading-relaxed whitespace-pre-line">${mail.body}</div>
+          <div class="pt-4 border-t border-zinc-800 space-y-2">
+            <div class="text-base font-semibold text-zinc-100">${escapeHtml(mail.subject)}</div>
+            <div class="font-mono text-xs text-zinc-500">From: ${escapeHtml(mail.sender)} | ${new Date(mail.date).toLocaleString()}</div>
+            <div class="text-sm text-zinc-400 leading-relaxed whitespace-pre-line">${escapeHtml(mail.body)}</div>
           </div>
         </div>
       `;
@@ -175,15 +271,13 @@
         btn.innerText = 'Drafting...';
         btn.disabled = true;
       }
-
       try {
         const res = await fetch(`/api/emails/${id}/draft`, { method: 'POST' });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to generate draft');
-
+        
         const target = emails.find(e => e.id === id);
         if (target) target.suggested_reply = data.suggested_reply;
-
         if (activeId === id) select(id);
       } catch (err) {
         alert('Draft failed: ' + err.message);
@@ -207,10 +301,17 @@
     function badgeStyle(urgency) {
       if (urgency === 'HIGH') return 'border-rose-900/60 bg-rose-950/40 text-rose-300';
       if (urgency === 'MEDIUM') return 'border-amber-900/60 bg-amber-950/40 text-amber-300';
+      if (urgency === 'LOW') return 'border-emerald-900/60 bg-emerald-950/40 text-emerald-300';
       return 'border-zinc-800 bg-zinc-900 text-zinc-400';
     }
 
-    load();
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    initProgressStream();
+    loadEmails();
   </script>
 </body>
 </html>
