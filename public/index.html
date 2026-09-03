@@ -2,17 +2,13 @@
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Local Mail Triage</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <style>
-    body { font-family: 'Inter', sans-serif; }
-    code, .mono { font-family: 'JetBrains Mono', monospace; }
-  </style>
 </head>
-<body class="bg-zinc-950 text-zinc-200 h-screen flex flex-col overflow-hidden antialiased">
+<body class="bg-zinc-950 text-zinc-200 h-screen flex flex-col overflow-hidden font-sans antialiased">
   <!-- Top Bar -->
-  <header class="h-14 border-b border-zinc-800/80 px-6 flex items-center justify-between bg-zinc-900/40">
+  <header class="h-14 border-b border-zinc-800/80 px-6 flex items-center justify-between bg-zinc-900/40 shrink-0">
     <div class="flex items-center gap-2">
       <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
       <h1 class="text-sm font-semibold tracking-wide uppercase text-zinc-400">Local Triage</h1>
@@ -25,7 +21,9 @@
   <!-- Content Workspace -->
   <main class="flex-1 flex overflow-hidden">
     <!-- Left Drawer (List) -->
-    <section class="w-2/5 border-r border-zinc-800/80 overflow-y-auto" id="listPane"></section>
+    <section class="w-2/5 border-r border-zinc-800/80 overflow-y-auto" id="listPane">
+      <div class="p-6 text-zinc-600 text-xs text-center">Click "Sync & Triage" to load unread mail</div>
+    </section>
 
     <!-- Right Drawer (Detail) -->
     <section class="w-3/5 p-6 overflow-y-auto bg-zinc-900/20" id="detailPane">
@@ -38,19 +36,28 @@
     let activeId = null;
 
     async function load() {
-      const res = await fetch('/api/emails');
-      emails = await res.json();
-      renderList();
-      if (emails.length && !activeId) select(emails[0].id);
+      try {
+        const res = await fetch('/api/emails');
+        emails = await res.json();
+        renderList();
+        if (emails.length && !activeId) select(emails[0].id);
+      } catch (err) {
+        console.error('Failed to load emails:', err);
+      }
     }
 
     async function sync() {
       const btn = document.getElementById('syncBtn');
-      btn.innerText = 'Analyzing...';
+      btn.innerText = 'Analyzing with Ollama...';
       btn.disabled = true;
       try {
-        await fetch('/api/sync', { method: 'POST' });
+        const res = await fetch('/api/sync', { method: 'POST' });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || 'Sync failed');
         await load();
+      } catch (err) {
+        alert('Sync failed: ' + err.message);
+        console.error(err);
       } finally {
         btn.innerText = 'Sync & Triage';
         btn.disabled = false;
@@ -59,11 +66,15 @@
 
     function renderList() {
       const pane = document.getElementById('listPane');
+      if (!emails.length) {
+        pane.innerHTML = '<div class="p-6 text-zinc-600 text-xs text-center">No emails found. Ensure you have unread messages in Gmail.</div>';
+        return;
+      }
       pane.innerHTML = emails.map(e => `
         <div onclick="select('${e.id}')" class="p-4 border-b border-zinc-800/50 cursor-pointer transition ${activeId === e.id ? 'bg-zinc-800/50' : 'hover:bg-zinc-900/40'}">
           <div class="flex items-center justify-between mb-1.5">
             <span class="text-xs font-semibold text-zinc-300 truncate max-w-[200px]">${e.sender}</span>
-            <span class="mono text-[10px] px-2 py-0.5 rounded border ${badgeStyle(e.urgency)}">${e.urgency}</span>
+            <span class="font-mono text-[10px] px-2 py-0.5 rounded border ${badgeStyle(e.urgency)}">${e.urgency}</span>
           </div>
           <div class="text-sm font-medium text-zinc-200 mb-1 truncate">${e.subject}</div>
           <p class="text-xs text-zinc-500 line-clamp-2">${e.tldr}</p>
@@ -80,15 +91,15 @@
         <div class="max-w-2xl space-y-6">
           <div class="p-4 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-3">
             <div class="flex items-center justify-between">
-              <span class="mono text-xs text-emerald-400 font-medium tracking-wide">AI TRIAGE SUMMARY</span>
-              <span class="mono text-[10px] px-2 py-0.5 rounded border border-zinc-700 bg-zinc-800">${mail.category}</span>
+              <span class="font-mono text-xs text-emerald-400 font-medium tracking-wide">AI TRIAGE SUMMARY</span>
+              <span class="font-mono text-[10px] px-2 py-0.5 rounded border border-zinc-700 bg-zinc-800">${mail.category}</span>
             </div>
             <p class="text-sm text-zinc-300">${mail.tldr}</p>
           </div>
 
           <div class="space-y-2">
             <div class="flex justify-between items-center">
-              <label class="mono text-xs text-zinc-400">DRAFT REPLY</label>
+              <label class="font-mono text-xs text-zinc-400">DRAFT REPLY</label>
               <button onclick="copyDraft()" id="copyBtn" class="text-xs text-zinc-400 hover:text-zinc-200 transition">Copy</button>
             </div>
             <textarea id="draftArea" class="w-full h-32 p-3 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-300 focus:outline-none focus:border-zinc-700 leading-relaxed resize-none">${mail.suggested_reply}</textarea>
@@ -96,7 +107,7 @@
 
           <div class="pt-4 border-t border-zinc-800/80 space-y-2">
             <div class="text-base font-semibold text-zinc-100">${mail.subject}</div>
-            <div class="mono text-xs text-zinc-500">From: ${mail.sender}</div>
+            <div class="font-mono text-xs text-zinc-500">From: ${mail.sender}</div>
             <div class="text-sm text-zinc-400 leading-relaxed whitespace-pre-line">${mail.body}</div>
           </div>
         </div>
