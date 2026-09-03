@@ -1,11 +1,18 @@
 import Database from 'better-sqlite3';
 import { existsSync, mkdirSync } from 'fs';
+import { logger } from './logger.js';
 
-if (!existsSync('./data')) mkdirSync('./data');
+if (!existsSync('./data')) {
+  logger.info('DB', 'Creating data directory: ./data');
+  mkdirSync('./data');
+}
+
 const db = new Database('./data/emails.sqlite');
+logger.info('DB', 'SQLite database opened at ./data/emails.sqlite');
 
-// Enable WAL mode for smooth concurrent reads and writes
+// Enable WAL mode
 db.pragma('journal_mode = WAL');
+logger.debug('DB', 'SQLite WAL mode enabled');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS emails (
@@ -26,10 +33,19 @@ db.exec(`
 `);
 
 export const emailDb = {
-  exists: (id) => !!db.prepare('SELECT 1 FROM emails WHERE id = ?').get(id),
-  getById: (id) => db.prepare('SELECT * FROM emails WHERE id = ?').get(id),
+  exists: (id) => {
+    const exists = !!db.prepare('SELECT 1 FROM emails WHERE id = ?').get(id);
+    logger.debug('DB', `Check email exists [id=${id}]: ${exists}`);
+    return exists;
+  },
+
+  getById: (id) => {
+    logger.debug('DB', `Fetching email by ID [id=${id}]`);
+    return db.prepare('SELECT * FROM emails WHERE id = ?').get(id);
+  },
   
   upsertRaw: (email) => {
+    logger.debug('DB', `Upserting raw email [id=${email.id}]`);
     const stmt = db.prepare(`
       INSERT INTO emails (id, sender, subject, date, body, status)
       VALUES (@id, @sender, @subject, @date, @body, 'PENDING')
@@ -43,6 +59,7 @@ export const emailDb = {
   },
 
   updateTriage: (id, { category, urgency, tldr, status = 'COMPLETED' }) => {
+    logger.info('DB', `Updating triage result [id=${id}]`, { category, urgency, status });
     return db.prepare(`
       UPDATE emails 
       SET category = ?, urgency = ?, tldr = ?, status = ?
@@ -51,6 +68,7 @@ export const emailDb = {
   },
 
   markPending: (limit = null) => {
+    logger.info('DB', `Marking emails as PENDING (limit: ${limit || 'ALL'})`);
     if (limit) {
       return db.prepare(`
         UPDATE emails 
@@ -62,10 +80,12 @@ export const emailDb = {
   },
 
   updateReply: (id, reply) => {
+    logger.info('DB', `Saved draft reply [id=${id}], length: ${reply ? reply.length : 0}`);
     return db.prepare('UPDATE emails SET suggested_reply = ? WHERE id = ?').run(reply, id);
   },
 
   getAll: (urgency = null) => {
+    logger.debug('DB', `Fetching all emails (filter: ${urgency || 'ALL'})`);
     if (urgency && urgency !== 'ALL') {
       return db.prepare('SELECT * FROM emails WHERE urgency = ? ORDER BY date DESC').all(urgency);
     }
@@ -81,8 +101,12 @@ export const emailDb = {
   },
 
   getNextPendingBatch: (limit = 100) => {
+    logger.debug('DB', `Querying next pending batch (limit=${limit})`);
     return db.prepare("SELECT * FROM emails WHERE status = 'PENDING' ORDER BY date DESC LIMIT ?").all(limit);
   },
 
-  clearAll: () => db.prepare('DELETE FROM emails').run()
+  clearAll: () => {
+    logger.warn('DB', 'Wiping all emails from SQLite');
+    return db.prepare('DELETE FROM emails').run();
+  }
 };
