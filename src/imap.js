@@ -22,6 +22,9 @@ export async function fetchEmails({ limit = null } = {}) {
     const rawResults = await connection.search(searchCriteria, fetchOptions);
     logger.info('IMAP', `Found ${rawResults.length} messages on IMAP server`);
 
+    // Ensure results are sorted ascending by UID before slicing the newest messages
+    rawResults.sort((a, b) => (a.attributes.uid || 0) - (b.attributes.uid || 0));
+
     const targetMessages = limit ? rawResults.slice(-limit) : rawResults;
     logger.info('IMAP', `Processing ${targetMessages.length} messages (limit=${limit || 'none'})`);
 
@@ -58,6 +61,9 @@ export async function fetchEmails({ limit = null } = {}) {
       parsed.push(emailObj);
       logger.debug('IMAP', `Parsed email UID ${emailObj.id}: "${emailObj.subject}" from ${emailObj.sender}`);
     }
+
+    // Sort parsed messages by date descending to align with SQLite's "ORDER BY date DESC"
+    parsed.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     logger.info('IMAP', `Completed parsing ${parsed.length} emails`);
     return parsed;

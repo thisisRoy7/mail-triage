@@ -8,7 +8,23 @@ export async function analyzeEmail({ id, subject, sender, body }) {
     bodySnippetLength: snippet.length
   });
 
-  const prompt = `Classify this email.
+  const prompt = `You are an automated email triage classifier. Classify the following email accurately.
+
+Classification Rules:
+1. Category:
+   - ACTION_REQUIRED: Direct personal communications, personal interview schedules, direct recruiter inquiries requesting a reply, security verification codes, or explicit personal deadlines.
+   - FYI: Application confirmations ("Application Received", "Application Submitted"), account sign-in alerts, terms of service updates, or status notices requiring no user action.
+   - NEWSLETTER: Automated job digests (Indeed, Naukri, Cutshort job alerts/matches), preparation material notifications (Cracku practice tests, daily targets, blogs, study plans), webinars, or promotional articles.
+   - SPAM: Unsolicited commercial promotions, marketing sales, discounts ("Mega Sale", "Discount Available"), or suspicious links.
+
+2. Urgency:
+   - HIGH: Immediate security incidents, direct personal interview invitations, or direct recruiter messages awaiting a direct response.
+   - MEDIUM: Important informational updates, application milestones, or relevant status confirmations.
+   - LOW: All job alert digests, daily tests, marketing emails, discount sales, newsletters, and informational broadcasts.
+
+IMPORTANT: Automated marketing, test prep streaks, and job digest emails MUST NEVER be classified as ACTION_REQUIRED or HIGH urgency.
+
+Email to classify:
 From: ${sender}
 Subject: ${subject}
 Snippet: ${snippet}

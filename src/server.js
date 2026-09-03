@@ -27,6 +27,19 @@ app.get('/api/progress/stream', (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders?.();
 
+  // Send periodic comment frame to prevent proxy/browser read timeouts
+  const keepAliveTimer = setInterval(() => {
+    try {
+      res.write(': ping\n\n');
+    } catch {
+      clearInterval(keepAliveTimer);
+    }
+  }, 15000);
+
+  res.on('close', () => {
+    clearInterval(keepAliveTimer);
+  });
+
   triageQueue.subscribe(res);
 });
 
