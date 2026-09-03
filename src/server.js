@@ -27,7 +27,6 @@ app.get('/api/progress/stream', (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders?.();
 
-  // Send periodic comment frame to prevent proxy/browser read timeouts
   const keepAliveTimer = setInterval(() => {
     try {
       res.write(': ping\n\n');
@@ -52,42 +51,30 @@ app.get('/api/emails', (req, res) => {
 });
 
 // Incremental sync
-app.post('/api/sync', async (req, res) => {
+app.post('/api/sync', (req, res) => {
   logger.info('HTTP', 'Received POST /api/sync');
-  try {
-    const result = await triageQueue.ingestAndTriage({ resetScope: 'none' });
-    res.json({ success: true, ...result });
-  } catch (err) {
-    logger.error('HTTP', 'POST /api/sync failed', err);
-    const statusCode = err.message.includes('already in progress') ? 409 : 500;
-    res.status(statusCode).json({ error: err.message });
-  }
+  triageQueue.ingestAndTriage({ resetScope: 'none' }).catch((err) => {
+    logger.error('HTTP', 'Background sync failed', err);
+  });
+  res.status(202).json({ accepted: true, message: 'Sync started in background.' });
 });
 
 // Soft Reset: Pull latest, re-triage top 100
-app.post('/api/reset/soft', async (req, res) => {
+app.post('/api/reset/soft', (req, res) => {
   logger.info('HTTP', 'Received POST /api/reset/soft');
-  try {
-    const result = await triageQueue.ingestAndTriage({ limit: 100, resetScope: 'soft' });
-    res.json({ success: true, ...result });
-  } catch (err) {
-    logger.error('HTTP', 'POST /api/reset/soft failed', err);
-    const statusCode = err.message.includes('already in progress') ? 409 : 500;
-    res.status(statusCode).json({ error: err.message });
-  }
+  triageQueue.ingestAndTriage({ limit: 100, resetScope: 'soft' }).catch((err) => {
+    logger.error('HTTP', 'Background soft reset failed', err);
+  });
+  res.status(202).json({ accepted: true, message: 'Soft reset started in background.' });
 });
 
 // Full Reset: Pull all, re-triage entire DB
-app.post('/api/reset/full', async (req, res) => {
+app.post('/api/reset/full', (req, res) => {
   logger.info('HTTP', 'Received POST /api/reset/full');
-  try {
-    const result = await triageQueue.ingestAndTriage({ limit: null, resetScope: 'full' });
-    res.json({ success: true, ...result });
-  } catch (err) {
-    logger.error('HTTP', 'POST /api/reset/full failed', err);
-    const statusCode = err.message.includes('already in progress') ? 409 : 500;
-    res.status(statusCode).json({ error: err.message });
-  }
+  triageQueue.ingestAndTriage({ limit: null, resetScope: 'full' }).catch((err) => {
+    logger.error('HTTP', 'Background full reset failed', err);
+  });
+  res.status(202).json({ accepted: true, message: 'Full reset started in background.' });
 });
 
 // Hard clear database

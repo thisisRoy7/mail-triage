@@ -35,8 +35,12 @@ db.exec(`
 export const emailDb = {
   exists: (id) => {
     const exists = !!db.prepare('SELECT 1 FROM emails WHERE id = ?').get(id);
-    logger.debug('DB', `Check email exists [id=${id}]: ${exists}`);
     return exists;
+  },
+
+  getMaxId: () => {
+    const row = db.prepare('SELECT MAX(CAST(id AS INTEGER)) as max_uid FROM emails').get();
+    return row && row.max_uid ? row.max_uid : 0;
   },
 
   getById: (id) => {
@@ -45,7 +49,6 @@ export const emailDb = {
   },
   
   upsertRaw: (email) => {
-    logger.debug('DB', `Upserting raw email [id=${email.id}]`);
     const stmt = db.prepare(`
       INSERT INTO emails (id, sender, subject, date, body, status)
       VALUES (@id, @sender, @subject, @date, @body, 'PENDING')

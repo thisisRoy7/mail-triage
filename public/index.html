@@ -17,14 +17,14 @@
     </div>
 
     <div class="flex items-center gap-2">
-      <button onclick="triggerReset('soft')" class="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 px-3 py-1.5 rounded-lg text-xs font-medium transition">
-        Soft Reset (100)
+      <button id="softResetBtn" onclick="triggerReset('soft')" class="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 disabled:opacity-50">
+        <span>Soft Reset (100)</span>
       </button>
-      <button onclick="triggerReset('full')" class="bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-900/60 px-3 py-1.5 rounded-lg text-xs font-medium transition">
-        Full Reset (All)
+      <button id="fullResetBtn" onclick="triggerReset('full')" class="bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-900/60 px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 disabled:opacity-50">
+        <span>Full Reset (All)</span>
       </button>
-      <button onclick="triggerSync()" id="syncBtn" class="bg-zinc-100 hover:bg-white text-zinc-950 font-medium px-3.5 py-1.5 rounded-lg text-xs transition shadow-sm">
-        Sync New
+      <button id="syncBtn" onclick="triggerSync()" class="bg-zinc-100 hover:bg-white text-zinc-950 font-medium px-3.5 py-1.5 rounded-lg text-xs transition shadow-sm flex items-center gap-1.5 disabled:opacity-50">
+        <span>Sync New</span>
       </button>
     </div>
   </header>
@@ -48,10 +48,8 @@
 
   <!-- Content Workspace -->
   <main class="flex-1 flex overflow-hidden">
-    <!-- Left Drawer (Filter Toolbar + Scrollable List) -->
+    <!-- Left Drawer -->
     <section class="w-5/12 border-r border-zinc-800 flex flex-col h-full overflow-hidden">
-      
-      <!-- List Controls Toolbar -->
       <div class="p-3 border-b border-zinc-800/80 bg-zinc-900/20 flex items-center justify-between gap-2 shrink-0">
         <div class="flex items-center gap-1">
           <button onclick="setFilter('ALL')" id="filter-ALL" class="urgency-tab px-2.5 py-1 rounded text-xs font-mono bg-zinc-800 text-zinc-100">ALL</button>
@@ -64,13 +62,12 @@
         </button>
       </div>
 
-      <!-- Virtualized Scroll List -->
       <div class="flex-1 overflow-y-auto divide-y divide-zinc-800/50" id="listPane">
         <div class="p-6 text-zinc-600 text-xs text-center">Loading mail...</div>
       </div>
     </section>
 
-    <!-- Right Drawer (Detail & Draft) -->
+    <!-- Right Drawer -->
     <section class="w-7/12 p-6 overflow-y-auto bg-zinc-900/10" id="detailPane">
       <div class="h-full flex items-center justify-center text-zinc-600 text-sm">Select an email to view triage analysis</div>
     </section>
@@ -159,28 +156,57 @@
 
     async function triggerSync() {
       const btn = document.getElementById('syncBtn');
+      const originalHtml = btn.innerHTML;
       btn.disabled = true;
+      btn.innerHTML = `
+        <svg class="animate-spin h-3.5 w-3.5 text-zinc-950" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+        </svg>
+        <span>Syncing...</span>
+      `;
+
       try {
-        await fetch('/api/sync', { method: 'POST' });
-        await loadEmails();
+        const res = await fetch('/api/sync', { method: 'POST' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
       } catch (err) {
         alert('Sync error: ' + err.message);
       } finally {
-        btn.disabled = false;
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.innerHTML = originalHtml;
+        }, 1200);
       }
     }
 
     async function triggerReset(type) {
       const msg = type === 'soft' 
-        ? 'Soft Reset will fetch the latest 100 emails and re-triage them. Proceed?' 
+        ? 'Soft Reset will fetch recent emails and re-triage the top 100. Proceed?' 
         : 'Full Reset will ingest all emails from your inbox and re-triage every message from scratch. Proceed?';
       if (!confirm(msg)) return;
 
+      const btnId = type === 'soft' ? 'softResetBtn' : 'fullResetBtn';
+      const btn = document.getElementById(btnId);
+      const originalHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = `
+        <svg class="animate-spin h-3.5 w-3.5 text-current" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+        </svg>
+        <span>Starting...</span>
+      `;
+
       try {
-        await fetch(`/api/reset/${type}`, { method: 'POST' });
-        await loadEmails();
+        const res = await fetch(`/api/reset/${type}`, { method: 'POST' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
       } catch (err) {
         alert(`Reset failed: ${err.message}`);
+      } finally {
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.innerHTML = originalHtml;
+        }, 1200);
       }
     }
 

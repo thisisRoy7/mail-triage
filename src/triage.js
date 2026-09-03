@@ -51,7 +51,6 @@ class TriageQueueManager {
     logger.warn('QUEUE', 'Stopping current queue execution before reset...');
     this.abortRequested = true;
 
-    // Wait until running queue worker acknowledges abort and exits cleanly
     while (this.isRunning) {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
@@ -152,12 +151,12 @@ class TriageQueueManager {
     this.broadcastState();
 
     try {
-      // If a reset is requested, halt any ongoing triage run first to avoid races
       if (resetScope !== 'none') {
         await this.stopCurrentRun();
       }
 
-      const fetched = await fetchEmails({ limit });
+      const sinceUid = resetScope === 'none' ? emailDb.getMaxId() : null;
+      const fetched = await fetchEmails({ limit, sinceUid });
       let insertedCount = 0;
 
       for (const mail of fetched) {
@@ -175,7 +174,6 @@ class TriageQueueManager {
         emailDb.markPending(null);
       }
 
-      // Trigger the queue runner
       this.runQueue().catch((err) => {
         logger.error('QUEUE', 'Async queue trigger failed', err);
       });

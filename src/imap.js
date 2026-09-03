@@ -4,7 +4,7 @@ import { convert } from 'html-to-text';
 import { config } from './config.js';
 import { logger } from './logger.js';
 
-export async function fetchEmails({ limit = null } = {}) {
+export async function fetchEmails({ limit = null, sinceUid = null } = {}) {
   logger.info('IMAP', `Initiating IMAP connection to ${config.gmail.host}:${config.gmail.port}`);
   
   let connection;
@@ -15,14 +15,17 @@ export async function fetchEmails({ limit = null } = {}) {
     await connection.openBox('INBOX');
     logger.info('IMAP', 'Opened INBOX folder');
 
-    const searchCriteria = ['ALL'];
+    const searchCriteria = sinceUid ? [['UID', `${sinceUid + 1}:*`]] : ['ALL'];
     const fetchOptions = { bodies: ['HEADER', ''], markSeen: false };
     
-    logger.info('IMAP', 'Searching inbox for messages');
+    logger.info('IMAP', `Searching inbox for messages (criteria: ${JSON.stringify(searchCriteria)})`);
     const rawResults = await connection.search(searchCriteria, fetchOptions);
     logger.info('IMAP', `Found ${rawResults.length} messages on IMAP server`);
 
-    // Ensure results are sorted ascending by UID before slicing the newest messages
+    if (rawResults.length === 0) {
+      return [];
+    }
+
     rawResults.sort((a, b) => (a.attributes.uid || 0) - (b.attributes.uid || 0));
 
     const targetMessages = limit ? rawResults.slice(-limit) : rawResults;
@@ -62,7 +65,6 @@ export async function fetchEmails({ limit = null } = {}) {
       logger.debug('IMAP', `Parsed email UID ${emailObj.id}: "${emailObj.subject}" from ${emailObj.sender}`);
     }
 
-    // Sort parsed messages by date descending to align with SQLite's "ORDER BY date DESC"
     parsed.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     logger.info('IMAP', `Completed parsing ${parsed.length} emails`);

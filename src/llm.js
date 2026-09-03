@@ -3,10 +3,7 @@ import { logger } from './logger.js';
 
 export async function analyzeEmail({ id, subject, sender, body }) {
   const snippet = body ? body.slice(0, 800) : '';
-  logger.info('LLM', `Calling classification model for email [id=${id}]`, {
-    model: config.ollama.models.classify,
-    bodySnippetLength: snippet.length
-  });
+  logger.info('LLM', `Calling classification model for email [id=${id}]`);
 
   const prompt = `You are an automated email triage classifier. Classify the following email accurately.
 
@@ -48,7 +45,7 @@ Return ONLY a JSON object matching this exact schema:
         model: config.ollama.models.classify,
         stream: false,
         format: 'json',
-        keep_alive: -1,
+        keep_alive: '5m',
         prompt
       })
     });
@@ -61,15 +58,12 @@ Return ONLY a JSON object matching this exact schema:
     }
 
     const data = JSON.parse(rawText);
-    logger.debug('LLM', `Ollama raw classification response for [id=${id}]`, data.response);
-
     const parsed = JSON.parse(data.response);
-    logger.info('LLM', `Successfully parsed classification for [id=${id}]`, parsed);
+    logger.info('LLM', `Successfully parsed classification for [id=${id}] | ${parsed.category} - ${parsed.urgency}`);
     return parsed;
   } catch (err) {
     logger.error('LLM', `Classification parsing failed for [id=${id}]. Triggering default fallback.`, {
-      error: err.message,
-      rawOllamaResponse: rawText
+      error: err.message
     });
     return {
       category: 'FYI',

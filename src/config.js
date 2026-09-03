@@ -39,7 +39,7 @@ export const config = {
     host: resolveOllamaUrl(process.env.OLLAMA_HOST),
     models: {
       classify: 'qwen2.5-coder:1.5b-instruct',
-      draft: 'qwen2.5-coder:7b',
+      draft: 'qwen2.5-coder:1.5b-instruct',
       embed: 'nomic-embed-text'
     }
   },
