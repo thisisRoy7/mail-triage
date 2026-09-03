@@ -24,7 +24,6 @@ db.exec(`
     category TEXT,
     urgency TEXT,
     tldr TEXT,
-    suggested_reply TEXT,
     status TEXT DEFAULT 'PENDING',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
@@ -34,8 +33,7 @@ db.exec(`
 
 export const emailDb = {
   exists: (id) => {
-    const exists = !!db.prepare('SELECT 1 FROM emails WHERE id = ?').get(id);
-    return exists;
+    return !!db.prepare('SELECT 1 FROM emails WHERE id = ?').get(id);
   },
 
   getMaxId: () => {
@@ -80,11 +78,6 @@ export const emailDb = {
       `).run(limit);
     }
     return db.prepare("UPDATE emails SET status = 'PENDING'").run();
-  },
-
-  updateReply: (id, reply) => {
-    logger.info('DB', `Saved draft reply [id=${id}], length: ${reply ? reply.length : 0}`);
-    return db.prepare('UPDATE emails SET suggested_reply = ? WHERE id = ?').run(reply, id);
   },
 
   getAll: (urgency = null) => {

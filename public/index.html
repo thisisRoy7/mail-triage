@@ -6,8 +6,14 @@
   <title>Local Mail Triage</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-zinc-950 text-zinc-200 h-screen flex flex-col overflow-hidden font-sans antialiased">
-  
+<body class="bg-zinc-950 text-zinc-200 h-screen flex flex-col overflow-hidden font-sans antialiased relative">
+
+  <!-- Rejection / Notification Toast -->
+  <div id="toastNotification" class="fixed top-16 right-6 z-50 transform -translate-y-4 opacity-0 pointer-events-none transition-all duration-200 ease-out flex items-center gap-2 bg-rose-950 text-rose-200 border border-rose-800 text-xs px-3.5 py-2 rounded-lg shadow-xl">
+    <svg class="w-4 h-4 text-rose-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    <span id="toastMessage" class="font-medium">Action rejected</span>
+  </div>
+
   <!-- Top Bar -->
   <header class="h-14 border-b border-zinc-800 px-6 flex items-center justify-between bg-zinc-900/60 shrink-0">
     <div class="flex items-center gap-3">
@@ -17,14 +23,34 @@
     </div>
 
     <div class="flex items-center gap-2">
-      <button id="softResetBtn" onclick="triggerReset('soft')" class="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 disabled:opacity-50">
-        <span>Soft Reset (100)</span>
+      <button id="softResetBtn" onclick="triggerReset('soft')" class="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 disabled:cursor-not-allowed">
+        <span id="softResetSpinner" class="hidden">
+          <svg class="animate-spin h-3.5 w-3.5 text-current" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+          </svg>
+        </span>
+        <span id="softResetLabel">Soft Reset (100)</span>
       </button>
-      <button id="fullResetBtn" onclick="triggerReset('full')" class="bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-900/60 px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 disabled:opacity-50">
-        <span>Full Reset (All)</span>
+
+      <button id="fullResetBtn" onclick="triggerReset('full')" class="bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-900/60 px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 disabled:cursor-not-allowed">
+        <span id="fullResetSpinner" class="hidden">
+          <svg class="animate-spin h-3.5 w-3.5 text-current" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+          </svg>
+        </span>
+        <span id="fullResetLabel">Full Reset (All)</span>
       </button>
-      <button id="syncBtn" onclick="triggerSync()" class="bg-zinc-100 hover:bg-white text-zinc-950 font-medium px-3.5 py-1.5 rounded-lg text-xs transition shadow-sm flex items-center gap-1.5 disabled:opacity-50">
-        <span>Sync New</span>
+
+      <button id="syncBtn" onclick="triggerSync()" class="bg-zinc-100 hover:bg-white text-zinc-950 font-medium px-3.5 py-1.5 rounded-lg text-xs transition shadow-sm flex items-center gap-1.5 disabled:cursor-not-allowed">
+        <span id="syncSpinner" class="hidden">
+          <svg class="animate-spin h-3.5 w-3.5 text-zinc-950" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+          </svg>
+        </span>
+        <span id="syncLabel">Sync New</span>
       </button>
     </div>
   </header>
@@ -78,15 +104,78 @@
     let activeId = null;
     let currentFilter = 'ALL';
     let isWorkerRunning = false;
+    let isWorkerIngesting = false;
     let activeStream = null;
+    let activeActionType = null; // 'sync', 'soft', 'full', or null
+    let toastTimeout = null;
+
+    function showRejectedToast(msg) {
+      const toast = document.getElementById('toastNotification');
+      const label = document.getElementById('toastMessage');
+      label.innerText = msg;
+      
+      toast.classList.remove('-translate-y-4', 'opacity-0', 'pointer-events-none');
+      toast.classList.add('translate-y-0', 'opacity-100');
+
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('-translate-y-4', 'opacity-0', 'pointer-events-none');
+      }, 3000);
+    }
+
+    function updateActionButtons(isIngesting, isRunning) {
+      const syncBtn = document.getElementById('syncBtn');
+      const softBtn = document.getElementById('softResetBtn');
+      const fullBtn = document.getElementById('fullResetBtn');
+
+      const isBusy = isIngesting || isRunning;
+
+      if (!isBusy) {
+        activeActionType = null;
+        // Restore all buttons
+        syncBtn.disabled = false;
+        softBtn.disabled = false;
+        fullBtn.disabled = false;
+
+        document.getElementById('syncSpinner').classList.add('hidden');
+        document.getElementById('syncLabel').innerText = 'Sync New';
+
+        document.getElementById('softResetSpinner').classList.add('hidden');
+        document.getElementById('softResetLabel').innerText = 'Soft Reset (100)';
+
+        document.getElementById('fullResetSpinner').classList.add('hidden');
+        document.getElementById('fullResetLabel').innerText = 'Full Reset (All)';
+        return;
+      }
+
+      // If active, keep the current initiating button spinning and disable other buttons
+      syncBtn.disabled = activeActionType !== 'sync';
+      softBtn.disabled = activeActionType !== 'soft';
+      fullBtn.disabled = activeActionType !== 'full';
+
+      if (activeActionType === 'sync') {
+        document.getElementById('syncSpinner').classList.remove('hidden');
+        document.getElementById('syncLabel').innerText = isIngesting ? 'Fetching IMAP...' : 'Triaging...';
+      } else if (activeActionType === 'soft') {
+        document.getElementById('softResetSpinner').classList.remove('hidden');
+        document.getElementById('softResetLabel').innerText = isIngesting ? 'Fetching IMAP...' : 'Triaging...';
+      } else if (activeActionType === 'full') {
+        document.getElementById('fullResetSpinner').classList.remove('hidden');
+        document.getElementById('fullResetLabel').innerText = isIngesting ? 'Fetching IMAP...' : 'Triaging...';
+      }
+    }
 
     function initProgressStream() {
       const evtSource = new EventSource('/api/progress/stream');
 
       evtSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        const { isRunning, isStalled, currentEmail, stats, progressPct } = data;
+        const { isRunning, isIngesting, isStalled, currentEmail, stats, progressPct } = data;
         
+        isWorkerRunning = isRunning;
+        isWorkerIngesting = isIngesting;
+
         const heartbeat = document.getElementById('workerHeartbeat');
         const badge = document.getElementById('workerStatusBadge');
 
@@ -94,6 +183,10 @@
           heartbeat.className = 'w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping';
           badge.innerText = 'Stalled';
           badge.className = 'font-mono text-[10px] px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800';
+        } else if (isIngesting) {
+          heartbeat.className = 'w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse';
+          badge.innerText = 'Ingesting';
+          badge.className = 'font-mono text-[10px] px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800';
         } else if (isRunning) {
           heartbeat.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse';
           badge.innerText = 'Processing';
@@ -110,10 +203,11 @@
 
         document.getElementById('activeEmailName').innerText = currentEmail 
           ? `[${currentEmail.sender}] ${currentEmail.subject}` 
-          : (isRunning ? 'Scanning queue...' : 'No active background tasks');
+          : (isIngesting ? 'Syncing messages with Gmail...' : (isRunning ? 'Scanning queue...' : 'No active background tasks'));
 
-        if (isWorkerRunning !== isRunning) {
-          isWorkerRunning = isRunning;
+        updateActionButtons(isIngesting, isRunning);
+
+        if (!isRunning && !isIngesting) {
           loadEmails();
         }
       };
@@ -155,58 +249,62 @@
     }
 
     async function triggerSync() {
-      const btn = document.getElementById('syncBtn');
-      const originalHtml = btn.innerHTML;
-      btn.disabled = true;
-      btn.innerHTML = `
-        <svg class="animate-spin h-3.5 w-3.5 text-zinc-950" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-        </svg>
-        <span>Syncing...</span>
-      `;
+      if (isWorkerIngesting || isWorkerRunning) {
+        showRejectedToast('Rejected: a task is already processing.');
+        return;
+      }
+
+      activeActionType = 'sync';
+      updateActionButtons(true, false);
 
       try {
         const res = await fetch('/api/sync', { method: 'POST' });
+        if (res.status === 409) {
+          const errData = await res.json();
+          showRejectedToast(errData.error || 'Rejected: task in progress.');
+          activeActionType = null;
+          updateActionButtons(false, false);
+          return;
+        }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
       } catch (err) {
-        alert('Sync error: ' + err.message);
-      } finally {
-        setTimeout(() => {
-          btn.disabled = false;
-          btn.innerHTML = originalHtml;
-        }, 1200);
+        showRejectedToast(`Sync failed: ${err.message}`);
+        activeActionType = null;
+        updateActionButtons(false, false);
       }
     }
 
     async function triggerReset(type) {
+      if (isWorkerIngesting || isWorkerRunning) {
+        showRejectedToast('Rejected: a task is already processing.');
+        return;
+      }
+
       const msg = type === 'soft' 
-        ? 'Soft Reset will fetch recent emails and re-triage the top 100. Proceed?' 
-        : 'Full Reset will ingest all emails from your inbox and re-triage every message from scratch. Proceed?';
+        ? 'Soft Reset will clear temporary drafts and re-triage the top 100 emails. Proceed?' 
+        : 'Full Reset will clear temporary drafts, re-fetch the inbox, and re-triage all emails. Proceed?';
       if (!confirm(msg)) return;
 
-      const btnId = type === 'soft' ? 'softResetBtn' : 'fullResetBtn';
-      const btn = document.getElementById(btnId);
-      const originalHtml = btn.innerHTML;
-      btn.disabled = true;
-      btn.innerHTML = `
-        <svg class="animate-spin h-3.5 w-3.5 text-current" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-        </svg>
-        <span>Starting...</span>
-      `;
+      activeActionType = type;
+      updateActionButtons(true, false);
 
       try {
+        emails.forEach(e => { e.suggested_reply = null; });
+        if (activeId) select(activeId);
+
         const res = await fetch(`/api/reset/${type}`, { method: 'POST' });
+        if (res.status === 409) {
+          const errData = await res.json();
+          showRejectedToast(errData.error || 'Rejected: task in progress.');
+          activeActionType = null;
+          updateActionButtons(false, false);
+          return;
+        }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
       } catch (err) {
-        alert(`Reset failed: ${err.message}`);
-      } finally {
-        setTimeout(() => {
-          btn.disabled = false;
-          btn.innerHTML = originalHtml;
-        }, 1200);
+        showRejectedToast(`Reset failed: ${err.message}`);
+        activeActionType = null;
+        updateActionButtons(false, false);
       }
     }
 
@@ -262,7 +360,10 @@
 
           <div class="space-y-3" id="draftContainer">
             <div class="flex justify-between items-center">
-              <label class="font-mono text-xs text-zinc-400">DRAFT REPLY</label>
+              <div class="flex items-center gap-2">
+                <label class="font-mono text-xs text-zinc-400">DRAFT REPLY</label>
+                <span class="font-mono text-[9px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500">SESSION ONLY</span>
+              </div>
               ${hasReply ? `
                 <div class="flex items-center gap-2">
                   <button onclick="requestDraft('${mail.id}')" id="generateDraftBtn" class="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-2.5 py-1 rounded text-zinc-200 transition">Regenerate</button>
@@ -275,7 +376,7 @@
               <textarea id="draftArea" class="w-full h-36 p-3 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-300 focus:outline-none focus:border-zinc-700 leading-relaxed resize-none">${escapeHtml(mail.suggested_reply)}</textarea>
             ` : `
               <div id="draftPlaceholder" class="p-4 border border-dashed border-zinc-800 rounded-lg flex flex-col items-center justify-center gap-2 text-center bg-zinc-950/40">
-                <span class="text-xs text-zinc-500">No draft generated for this email.</span>
+                <span class="text-xs text-zinc-500">No temporary draft generated for this email.</span>
                 <button onclick="requestDraft('${mail.id}')" id="generateDraftBtn" class="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-3 py-1.5 rounded-md text-zinc-200 font-medium transition">
                   Generate Draft with Ollama
                 </button>
@@ -297,7 +398,10 @@
       
       container.innerHTML = `
         <div class="flex justify-between items-center">
-          <label class="font-mono text-xs text-zinc-400">DRAFT REPLY</label>
+          <div class="flex items-center gap-2">
+            <label class="font-mono text-xs text-zinc-400">DRAFT REPLY</label>
+            <span class="font-mono text-[9px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500">SESSION ONLY</span>
+          </div>
           <div class="flex items-center gap-2">
             <button onclick="requestDraft('${id}')" id="generateDraftBtn" disabled class="text-xs bg-zinc-800/50 border border-zinc-800 px-2.5 py-1 rounded text-zinc-500 cursor-not-allowed">Streaming...</button>
             <button onclick="copyDraft()" id="copyBtn" class="text-xs text-zinc-400 hover:text-zinc-200 transition">Copy</button>
