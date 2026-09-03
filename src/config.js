@@ -15,3 +15,10 @@ export const config = {
   },
   port: process.env.PORT || 3000
 };
+
+// Example of adding error handling and a log statement
+try {
+  console.log('App is running on port', config.port);
+} catch (error) {
+  console.error('Error initializing app:', error);
+}

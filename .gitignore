@@ -2,6 +2,8 @@
 node_modules
 npm-debug.log
 
+.env
+
 # Ignore package-lock.json and yarn.lock files
 package-lock.json
 yarn.lock
