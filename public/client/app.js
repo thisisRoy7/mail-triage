@@ -49,7 +49,7 @@ function App() {
       });
       setCategoryCounts(counts);
     } catch (err) {
-      console.error('Failed to update category tallies:', err);
+      console.error('Failed to update category counts:', err);
     }
   };
 
@@ -63,7 +63,7 @@ function App() {
         setActiveId(null);
       }
     } catch (err) {
-      showToast(`Error loading triage items: ${err.message}`);
+      showToast(`Error: ${err.message}`);
     }
   };
 
@@ -116,10 +116,7 @@ function App() {
   };
 
   const startDraftGeneration = (mailId) => {
-    if (activeStreamRef.current) {
-      activeStreamRef.current.close();
-    }
-
+    if (activeStreamRef.current) activeStreamRef.current.close();
     setDraftBuffer('');
     setIsStreaming(true);
 
@@ -144,38 +141,46 @@ function App() {
     }
   };
 
-  return React.createElement('div', { className: 'h-screen w-screen flex flex-col bg-zinc-950 text-zinc-100 overflow-hidden font-sans' },
+  return React.createElement('div', { className: 'h-screen w-screen flex flex-col overflow-hidden text-zinc-100 bg-[#0D0D11]' },
     toastMessage && React.createElement('div', {
-      className: 'fixed top-20 right-6 z-50 flex items-center gap-2 bg-zinc-900/95 backdrop-blur-md text-zinc-200 border border-zinc-700/60 text-xs px-4 py-2.5 rounded-xl shadow-2xl animate-in slide-in-from-top-2 duration-150'
+      className: 'fixed top-18 right-8 z-50 flex items-center gap-2 glass-panel text-zinc-200 text-xs px-4 py-2.5 rounded-2xl shadow-2xl animate-in slide-in-from-top-2 duration-200'
     }, toastMessage),
 
     React.createElement(Header, {
+      activeEmail,
       workerState,
       onTriggerSync: handleTriggerSync,
       onTriggerReset: handleTriggerReset,
       actionType
     }),
 
-    React.createElement('div', { className: 'flex-1 flex overflow-hidden p-3 gap-3' },
-      React.createElement(NavSidebar, {
-        currentFilter,
-        onSelectFilter: setCurrentFilter,
-        counts: categoryCounts,
-        workerState
-      }),
-      React.createElement(TriageFeed, {
-        emails,
-        selectedId: activeId,
-        onSelectEmail: setActiveId,
-        onRefresh: () => {
-          refreshGlobalCounts();
-          loadData(currentFilter);
-        }
-      }),
-      React.createElement(ReaderStage, {
-        email: activeEmail,
-        onOpenDrawer: handleOpenDrawer
-      })
+    // Bento 3-Column Layout: Columns 2 and 3 scroll independently
+    React.createElement('div', { className: 'flex-1 grid grid-cols-12 gap-4 p-4 min-h-0 overflow-hidden' },
+      React.createElement('div', { className: 'col-span-3 h-full min-h-0 flex flex-col' },
+        React.createElement(NavSidebar, {
+          currentFilter,
+          onSelectFilter: setCurrentFilter,
+          counts: categoryCounts,
+          workerState
+        })
+      ),
+      React.createElement('div', { className: 'col-span-4 h-full min-h-0 flex flex-col' },
+        React.createElement(TriageFeed, {
+          emails,
+          selectedId: activeId,
+          onSelectEmail: setActiveId,
+          onRefresh: () => {
+            refreshGlobalCounts();
+            loadData(currentFilter);
+          }
+        })
+      ),
+      React.createElement('div', { className: 'col-span-5 h-full min-h-0 flex flex-col' },
+        React.createElement(ReaderStage, {
+          email: activeEmail,
+          onOpenDrawer: handleOpenDrawer
+        })
+      )
     ),
 
     React.createElement(DraftDrawer, {

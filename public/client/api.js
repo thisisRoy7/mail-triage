@@ -6,6 +6,12 @@ export async function fetchEmails(urgency = 'ALL') {
   return res.json();
 }
 
+export async function fetchEmailContent(id) {
+  const res = await fetch(`/api/emails/${id}/content`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
 export async function triggerSync() {
   const res = await fetch('/api/sync', { method: 'POST' });
   if (res.status === 409) throw new Error('A background operation is currently running.');

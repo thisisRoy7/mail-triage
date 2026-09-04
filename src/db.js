@@ -14,6 +14,7 @@ logger.info('DB', 'SQLite database opened at ./data/emails.sqlite');
 db.pragma('journal_mode = WAL');
 logger.debug('DB', 'SQLite WAL mode enabled');
 
+// Migration: Ensure html column exists
 db.exec(`
   CREATE TABLE IF NOT EXISTS emails (
     id TEXT PRIMARY KEY,
@@ -21,6 +22,7 @@ db.exec(`
     subject TEXT,
     date TEXT,
     body TEXT,
+    html TEXT,
     category TEXT,
     urgency TEXT,
     tldr TEXT,
@@ -30,6 +32,13 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_emails_status ON emails(status);
   CREATE INDEX IF NOT EXISTS idx_emails_urgency ON emails(urgency);
 `);
+
+// Add html column if upgrading existing database table
+try {
+  db.exec("ALTER TABLE emails ADD COLUMN html TEXT");
+} catch (err) {
+  // Column already exists
+}
 
 export const emailDb = {
   exists: (id) => {
@@ -45,16 +54,22 @@ export const emailDb = {
     logger.debug('DB', `Fetching email by ID [id=${id}]`);
     return db.prepare('SELECT * FROM emails WHERE id = ?').get(id);
   },
+
+  getHtmlById: (id) => {
+    logger.debug('DB', `Fetching email HTML content [id=${id}]`);
+    return db.prepare('SELECT id, html, body FROM emails WHERE id = ?').get(id);
+  },
   
   upsertRaw: (email) => {
     const stmt = db.prepare(`
-      INSERT INTO emails (id, sender, subject, date, body, status)
-      VALUES (@id, @sender, @subject, @date, @body, 'PENDING')
+      INSERT INTO emails (id, sender, subject, date, body, html, status)
+      VALUES (@id, @sender, @subject, @date, @body, @html, 'PENDING')
       ON CONFLICT(id) DO UPDATE SET
         sender = excluded.sender,
         subject = excluded.subject,
         date = excluded.date,
-        body = excluded.body
+        body = excluded.body,
+        html = excluded.html
     `);
     return stmt.run(email);
   },
@@ -80,12 +95,14 @@ export const emailDb = {
     return db.prepare("UPDATE emails SET status = 'PENDING'").run();
   },
 
+  // Exclude heavy HTML from queue list queries to minimize payload sizes
   getAll: (urgency = null) => {
-    logger.debug('DB', `Fetching all emails (filter: ${urgency || 'ALL'})`);
+    logger.debug('DB', `Fetching all emails metadata (filter: ${urgency || 'ALL'})`);
+    const selectFields = 'id, sender, subject, date, body, category, urgency, tldr, status, created_at';
     if (urgency && urgency !== 'ALL') {
-      return db.prepare('SELECT * FROM emails WHERE urgency = ? ORDER BY date DESC').all(urgency);
+      return db.prepare(`SELECT ${selectFields} FROM emails WHERE urgency = ? ORDER BY date DESC`).all(urgency);
     }
-    return db.prepare('SELECT * FROM emails ORDER BY date DESC').all();
+    return db.prepare(`SELECT ${selectFields} FROM emails ORDER BY date DESC`).all();
   },
 
   getQueueStats: () => {

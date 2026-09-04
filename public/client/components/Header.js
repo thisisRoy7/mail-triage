@@ -1,76 +1,129 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { RefreshCw, RotateCcw, Database, ChevronDown, Check, Plus, User } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
-export default function Header({ workerState, onTriggerSync, onTriggerReset, actionType }) {
-  const { isRunning, isIngesting, isStalled, stats } = workerState;
+export default function Header({ activeEmail, workerState, onTriggerSync, onTriggerReset, actionType }) {
+  const { isRunning, isIngesting } = workerState;
   const isBusy = isRunning || isIngesting;
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setIsAccountMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const getInitial = () => {
+    if (!activeEmail || !activeEmail.sender) return 'M';
+    const clean = activeEmail.sender.replace(/["'<].*?[>"]/g, '').trim();
+    return clean ? clean.charAt(0).toUpperCase() : 'M';
+  };
+
+  const accounts = [
+    { name: 'Primary Mailbox', email: 'user@domain.com', active: true },
+    { name: 'Work Inbox', email: 'work@company.com', active: false }
+  ];
 
   return React.createElement('header', {
-    className: 'h-16 px-6 bg-zinc-950/70 backdrop-blur-xl border-b border-zinc-800/60 flex items-center justify-between shrink-0 z-20'
+    className: 'h-16 px-6 glass-panel border-b border-white/5 flex items-center justify-between shrink-0 z-30'
   },
-    // Left: Suite Identity & Engine Indicator
-    React.createElement('div', { className: 'flex items-center gap-4' },
-      React.createElement('div', { className: 'flex items-center gap-3' },
+    // Left: Account Switcher Button + Title
+    React.createElement('div', { className: 'flex items-center gap-3.5 relative', ref: menuRef },
+      React.createElement('button', {
+        onClick: () => setIsAccountMenuOpen(!isAccountMenuOpen),
+        className: 'relative flex items-center gap-2 p-1 pr-2.5 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/5 transition-all duration-200 active:scale-95 text-left group'
+      },
         React.createElement('div', {
-          className: 'w-9 h-9 rounded-2xl bg-gradient-to-tr from-indigo-500 via-indigo-600 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 text-white font-bold text-sm tracking-wide'
-        }, 'M'),
-        React.createElement('div', null,
-          React.createElement('div', { className: 'text-sm font-semibold tracking-tight text-zinc-100 flex items-center gap-2' },
-            'Mail Triage',
-            React.createElement('span', { className: 'text-[10px] font-medium text-zinc-400 bg-zinc-800/80 px-1.5 py-0.5 rounded-md border border-zinc-700/50' }, 'PRO')
+          className: 'w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500/30 to-violet-600/20 border border-indigo-400/25 flex items-center justify-center text-xs font-semibold text-indigo-200 shadow-inner group-hover:border-indigo-400/40 transition-colors'
+        }, getInitial()),
+        React.createElement('span', { className: 'text-xs font-semibold text-zinc-200 tracking-tight' }, 'Mail Triage Engine'),
+        React.createElement(ChevronDown, {
+          className: `w-3.5 h-3.5 text-zinc-500 transition-transform duration-200 ${isAccountMenuOpen ? 'rotate-180 text-zinc-300' : ''}`
+        })
+      ),
+
+      // Account Dropdown Menu with motion animation
+      React.createElement(AnimatePresence, null,
+        isAccountMenuOpen && React.createElement(motion.div, {
+          initial: { opacity: 0, y: -6, scale: 0.96 },
+          animate: { opacity: 1, y: 0, scale: 1 },
+          exit: { opacity: 0, y: -6, scale: 0.96 },
+          transition: { duration: 0.15, ease: 'easeOut' },
+          className: 'absolute top-12 left-0 w-64 glass-panel rounded-2xl p-2 shadow-2xl border border-white/10 z-50 bg-[#121218]/90 backdrop-blur-2xl'
+        },
+          React.createElement('div', { className: 'px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500' },
+            'Connected Inboxes'
           ),
-          React.createElement('div', { className: 'flex items-center gap-1.5 text-[11px] text-zinc-400 font-medium' },
-            React.createElement('span', {
-              className: `w-2 h-2 rounded-full transition-all duration-300 ${
-                isStalled ? 'bg-rose-500 ring-4 ring-rose-500/20 animate-pulse' :
-                isBusy ? 'bg-emerald-500 ring-4 ring-emerald-500/20 animate-pulse' : 'bg-zinc-600'
-              }`
-            }),
-            React.createElement('span', null, isBusy ? 'AI Engine Processing' : 'Workspace Ready')
+          React.createElement('div', { className: 'space-y-1 my-1' },
+            accounts.map((acc, i) =>
+              React.createElement('button', {
+                key: i,
+                onClick: () => setIsAccountMenuOpen(false),
+                className: `w-full flex items-center justify-between p-2 rounded-xl text-left transition-colors text-xs ${
+                  acc.active ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-zinc-400 hover:text-zinc-200'
+                }`
+              },
+                React.createElement('div', { className: 'flex flex-col min-w-0' },
+                  React.createElement('span', { className: 'font-medium truncate' }, acc.name),
+                  React.createElement('span', { className: 'text-[10px] text-zinc-500 truncate' }, acc.email)
+                ),
+                acc.active && React.createElement(Check, { className: 'w-3.5 h-3.5 text-indigo-400 shrink-0 ml-2' })
+              )
+            )
+          ),
+          React.createElement('div', { className: 'pt-1.5 mt-1 border-t border-white/5' },
+            React.createElement('button', {
+              onClick: () => setIsAccountMenuOpen(false),
+              className: 'w-full flex items-center gap-2 p-2 rounded-xl text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-white/5 transition-colors'
+            },
+              React.createElement(Plus, { className: 'w-3.5 h-3.5 text-zinc-400' }),
+              React.createElement('span', null, 'Connect New Account')
+            )
           )
         )
       )
     ),
 
-    // Right: Bento Action Cluster
-    React.createElement('div', { className: 'flex items-center gap-3' },
-      // Progress Counter
-      React.createElement('div', { className: 'hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-zinc-900/80 border border-zinc-800/80 text-xs text-zinc-300' },
-        React.createElement('span', { className: 'text-zinc-500 font-medium' }, 'Triaged'),
-        React.createElement('span', { className: 'text-zinc-100 font-semibold' }, `${stats.completed + stats.failed}`),
-        React.createElement('span', { className: 'text-zinc-600' }, '/'),
-        React.createElement('span', { className: 'text-zinc-400 font-medium' }, stats.total)
-      ),
-
+    // Right: Controls
+    React.createElement('div', { className: 'flex items-center gap-2.5' },
       // Reset Actions
-      React.createElement('div', { className: 'flex items-center bg-zinc-900/60 p-1 rounded-xl border border-zinc-800/80' },
+      React.createElement('div', { className: 'flex items-center bg-white/[0.03] p-1 rounded-2xl border border-white/5' },
         React.createElement('button', {
           onClick: () => onTriggerReset('soft'),
           disabled: isBusy,
-          className: 'rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-xs font-medium px-3 py-1.5 disabled:opacity-40 transition-all duration-150 active:scale-95'
-        }, actionType === 'soft' ? 'Refreshing...' : 'Soft Refresh'),
+          title: 'Soft Refresh',
+          className: 'flex items-center gap-1.5 rounded-xl hover:bg-white/5 text-zinc-400 hover:text-zinc-200 text-xs font-medium px-3 py-1.5 disabled:opacity-40 transition-all duration-150 active:scale-95'
+        },
+          React.createElement(RotateCcw, { className: `w-3.5 h-3.5 ${actionType === 'soft' ? 'animate-spin' : ''}` }),
+          React.createElement('span', null, actionType === 'soft' ? 'Refreshing...' : 'Soft Refresh')
+        ),
         React.createElement('button', {
           onClick: () => onTriggerReset('full'),
           disabled: isBusy,
-          className: 'rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-xs font-medium px-3 py-1.5 disabled:opacity-40 transition-all duration-150 active:scale-95'
-        }, actionType === 'full' ? 'Reindexing...' : 'Full Reindex')
+          title: 'Full Reindex',
+          className: 'flex items-center gap-1.5 rounded-xl hover:bg-white/5 text-zinc-400 hover:text-zinc-200 text-xs font-medium px-3 py-1.5 disabled:opacity-40 transition-all duration-150 active:scale-95'
+        },
+          React.createElement(Database, { className: `w-3.5 h-3.5 ${actionType === 'full' ? 'animate-spin' : ''}` }),
+          React.createElement('span', null, actionType === 'full' ? 'Reindexing...' : 'Reindex')
+        )
       ),
 
       // Primary Sync Trigger
       React.createElement('button', {
         onClick: onTriggerSync,
         disabled: isBusy,
-        className: 'rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-4 py-2 shadow-lg shadow-indigo-600/25 disabled:opacity-40 transition-all duration-200 active:scale-95 flex items-center gap-2'
+        className: 'rounded-2xl bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-semibold px-4 py-2 shadow-sm disabled:opacity-40 transition-all duration-150 active:scale-95 flex items-center gap-2'
       },
-        React.createElement('svg', {
-          className: `w-3.5 h-3.5 ${actionType === 'sync' ? 'animate-spin' : ''}`,
-          fill: 'none',
-          stroke: 'currentColor',
-          strokeWidth: 2,
-          viewBox: '0 0 24 24'
-        },
-          React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: 'M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99' })
-        ),
-        React.createElement('span', null, actionType === 'sync' ? 'Syncing...' : 'Sync Mailbox')
+        React.createElement(RefreshCw, {
+          className: `w-3.5 h-3.5 ${actionType === 'sync' ? 'animate-spin' : ''}`
+        }),
+        React.createElement('span', null, actionType === 'sync' ? 'Syncing...' : 'Sync')
       )
     )
   );

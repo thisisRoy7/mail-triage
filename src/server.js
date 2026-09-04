@@ -51,7 +51,7 @@ app.get('/api/progress/stream', (req, res) => {
   triageQueue.subscribe(res);
 });
 
-// Email list: attaches temporary drafts in memory without reading from disk
+// Email list: returns lightweight metadata excluding heavy HTML payloads
 app.get('/api/emails', (req, res) => {
   const { urgency } = req.query;
   const emails = emailDb.getAll(urgency);
@@ -63,6 +63,16 @@ app.get('/api/emails', (req, res) => {
 
   logger.info('HTTP', `Fetched ${emails.length} emails (urgency=${urgency || 'ALL'})`);
   res.json(emailsWithTempDrafts);
+});
+
+// On-demand fetch for full email HTML & rendered content
+app.get('/api/emails/:id/content', (req, res) => {
+  const { id } = req.params;
+  const record = emailDb.getHtmlById(id);
+  if (!record) {
+    return res.status(404).json({ error: 'Email content not found' });
+  }
+  res.json(record);
 });
 
 // Incremental sync

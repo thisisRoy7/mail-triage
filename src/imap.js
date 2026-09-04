@@ -53,12 +53,15 @@ export async function fetchEmails({ limit = null, sinceUid = null } = {}) {
         });
       }
 
+      const rawHtml = mail.html !== false && mail.html ? mail.html : null;
+
       const emailObj = {
         id: item.attributes.uid.toString(),
         sender: mail.from?.text || 'Unknown',
         subject: mail.subject || '(No Subject)',
         date: mail.date ? mail.date.toISOString() : new Date().toISOString(),
-        body: (cleanText || '').replace(/\s+/g, ' ').trim()
+        body: (cleanText || '').replace(/\s+/g, ' ').trim(),
+        html: rawHtml
       };
 
       parsed.push(emailObj);

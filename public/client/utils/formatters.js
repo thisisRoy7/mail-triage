@@ -1,25 +1,24 @@
 export function getBadgeClass(urgency) {
   switch (urgency) {
     case 'HIGH':
-      return 'text-rose-400 bg-rose-500/10 border-rose-500/25 ring-1 ring-rose-500/15';
+      return 'text-rose-400 bg-rose-500/10 border-rose-500/20';
     case 'MEDIUM':
-      return 'text-amber-400 bg-amber-500/10 border-amber-500/25 ring-1 ring-amber-500/15';
+      return 'text-amber-400 bg-amber-500/10 border-amber-500/20';
     case 'LOW':
     default:
-      return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25 ring-1 ring-emerald-500/15';
+      return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
   }
 }
 
 export function getBadgeLabel(urgency) {
   switch (urgency) {
     case 'HIGH':
-      return 'Action Required';
+      return 'High';
     case 'MEDIUM':
-      return 'Needs Review';
+      return 'Medium';
     case 'LOW':
-      return 'Low Priority';
     default:
-      return 'Unclassified';
+      return 'Low';
   }
 }
 
